@@ -1,5 +1,5 @@
 #include "execution_policy.hpp"
-//#include "all_of.hpp"
+#include "all_any_none.hpp"
 #include "equal.hpp"
 
 #include <iostream>
@@ -23,14 +23,15 @@ int main()
 
     p = exp_par::par;
 
-    bool result = exp_par::equal(p, v.begin(), v.end(), t.begin(), t.end());        
+    bool result = exp_par::equal(p, v.begin(), v.end(), t.begin(), t.end());
     std::cout << std::boolalpha << result << '\n';
 
-/*
-    bool r = parallel::any_of(p, v.begin(), v.end(), [](int i) { return i >= 0; });
+    bool r = exp_par::any_of(p, v.begin(), v.end(), [](int i) { return i >= 0; });
     std::cout << std::boolalpha << r << '\n';
 
-    r = parallel::all_of(p, v.begin(), v.end(), [](int i) { return i >= 0; });
+    r = exp_par::all_of(p, v.begin(), v.end(), [](int i) { return i >= 0; });
     std::cout << std::boolalpha << r << '\n';
-*/
+
+    r = exp_par::none_of(p, v.begin(), v.end(), [](int i) { return i < 0; });
+    std::cout << std::boolalpha << r << '\n';
 }
