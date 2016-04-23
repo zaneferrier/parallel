@@ -9,6 +9,7 @@
 #include <typeinfo>
 #include <vector>
 
+#include "dispatch.hpp"
 #include "execution_policy.hpp"
 #include "hardware_conc.hpp"
 
@@ -53,6 +54,8 @@ using pass_type =
 // This is because C++17 introduces Contiguous iterators, however,
 // in the functions we want these to take the random_access_iterator_tag
 // overloads.
+// (Note: I should make something to detect contiguous iterators for
+// vector overloads).
 template <typename InputIt1, typename InputIt2>
 using common_iter_type = 
     std::common_type_t<
@@ -68,7 +71,7 @@ using common_iter_type =
 // Sequential execution policy: simply forward to std::equal algorithm.
 // This doesn't have any separate overloads for different iterator types.
 template <typename InputIt1, typename InputIt2>
-bool seq_equal_impl(
+bool equal_impl(
     sequential_execution_policy, 
     InputIt1 begin1, InputIt1 end1, InputIt2 begin2, InputIt2 end2
 )
@@ -77,7 +80,7 @@ bool seq_equal_impl(
 }
 
 template <typename InputIt1, typename InputIt2, typename BinaryPredicate>
-bool seq_equal_impl(
+bool equal_impl(
     sequential_execution_policy, 
     InputIt1 begin1, InputIt1 end1, InputIt2 begin2, InputIt2 end2,
     BinaryPredicate binary_pred
@@ -96,7 +99,7 @@ template <
     typename InputIt1, typename InputIt2, 
     typename IteratorTag, typename BinaryPredicate
 >
-bool par_equal_impl(
+bool equal_impl(
     parallel_execution_policy, 
     InputIt1 begin1, InputIt1 end1, InputIt2 begin2, InputIt2 end2,
     IteratorTag, BinaryPredicate binary_pred 
@@ -106,20 +109,20 @@ bool par_equal_impl(
 }
 
 template <typename InputIt1, typename InputIt2, typename Predicate>
-bool par_equal_impl(
+bool equal_impl(
     parallel_execution_policy, 
     InputIt1 begin1, InputIt1 end1, InputIt2 begin2, InputIt2 end2,
     std::random_access_iterator_tag, Predicate pred 
 )
 {
-    const static unsigned hc = get_hardware_concurrency_or_default();
-    if(hc == 1) { return std::equal(begin1, end1, begin2, end2, pred); }
-
+    const static unsigned hc = 2 * get_hardware_concurrency_or_default();
     const auto size = std::distance(begin1, end1);
+
     if(size != std::distance(begin2, end2)) { return false; }
 
-    std::vector<std::future<void>> tasks;
     const auto chunk_size = static_cast<std::size_t>(size) / hc;
+    std::vector<std::future<void>> tasks;
+    tasks.reserve(hc);
 
     std::atomic<bool> are_same{true};
     
@@ -127,14 +130,13 @@ bool par_equal_impl(
         const unsigned i_chunk = i * chunk_size;
         const unsigned next_i_chunk = i_chunk + chunk_size; 
         tasks.emplace_back(
-            std::async([begin1, begin2, i_chunk, next_i_chunk, pred, &are_same] { 
+            std::async(
+                std::launch::async,
+                [begin1, begin2, i_chunk, next_i_chunk, pred, &are_same] { 
                 auto begin = begin1 + i_chunk;
                 auto end = begin1 + next_i_chunk;
                 auto begin2nd = begin2 + i_chunk;
-                while(
-                    begin != end &&
-                    are_same.load(std::memory_order_relaxed)
-                ) 
+                while(begin != end && are_same.load(std::memory_order_relaxed)) 
                 {
                     if(!pred(*begin, *begin2nd)) { 
                         are_same.store(false, std::memory_order_relaxed); 
@@ -151,7 +153,7 @@ bool par_equal_impl(
 }
 
 template <typename InputIt1, typename InputIt2, typename IteratorTag>
-bool par_equal_impl(
+bool equal_impl(
     parallel_execution_policy, 
     InputIt1 begin1, InputIt1 end1, InputIt2 begin2, InputIt2 end2,
     IteratorTag
@@ -169,7 +171,7 @@ bool par_equal_impl(
 
 // If a predicate isn't specified, generate one and use the above implementation.
 template <typename InputIt1, typename InputIt2>
-bool par_equal_impl(
+bool equal_impl(
     parallel_execution_policy pep, 
     InputIt1 begin1, InputIt1 end1, InputIt2 begin2, InputIt2 end2,
     std::random_access_iterator_tag tag
@@ -178,7 +180,7 @@ bool par_equal_impl(
     using pass_type_first = pass_type<InputIt1>;
     using pass_type_second = pass_type<InputIt2>;
 
-    return par_equal_impl(
+    return equal_impl(
         pep, begin1, end1, begin2, end2, tag, 
         [](pass_type_first v1, pass_type_second v2) { return v1 == v2; }
     );
@@ -190,7 +192,7 @@ bool par_equal_impl(
 //================================================================================
 
 template <typename InputIt1, typename InputIt2, typename IteratorTag>
-bool vec_equal_impl(
+bool equal_impl(
     parallel_vector_execution_policy pvep, 
     InputIt1 begin1, InputIt1 end1, InputIt2 begin2, InputIt2 end2,
     IteratorTag tag
@@ -199,7 +201,7 @@ bool vec_equal_impl(
     using pass_type_first = pass_type<InputIt1>;
     using pass_type_second = pass_type<InputIt2>;
 
-    return vec_equal_impl(
+    return equal_impl(
         pvep, begin1, end1, begin2, end2, tag, 
         [](pass_type_first v1, pass_type_second v2) { return v1 == v2; }
     );
@@ -209,20 +211,21 @@ template <
     typename InputIt1, typename InputIt2, 
     typename IteratorTag, typename BinaryPredicate
 >
-bool vec_equal_impl(
+bool equal_impl(
     parallel_vector_execution_policy, 
     InputIt1 begin1, InputIt1 end1, InputIt2 begin2, InputIt2 end2,
     IteratorTag, BinaryPredicate binary_pred 
 )
 { 
     // Not yet implemented
+    std::terminate();
 }
 
 // Vectorized operations really only make sense on basic types using
 // a simple equals. This should probably be in the overload where
 // no predicate is specified.
 template <typename InputIt1, typename InputIt2, typename BinaryPredicate>
-bool vec_equal_impl(
+bool equal_impl(
     parallel_vector_execution_policy, 
     InputIt1 begin1, InputIt1 end1, InputIt2 begin2, InputIt2 end2,
     std::random_access_iterator_tag, BinaryPredicate binary_pred 
@@ -244,55 +247,34 @@ bool vec_equal_impl(
 //================================================================================
 
 template <typename InputIt1, typename InputIt2>
-bool equal_dispatch(
+bool equal_impl(
     parallel_execution_policy pep, 
     InputIt1 begin1, InputIt1 end1, InputIt2 begin2, InputIt2 end2
 )
 {
-    
     using common_type = common_iter_type<InputIt1, InputIt2>;
-    return par_equal_impl(pep, begin1, end1, begin2, end2, common_type{});
+    return equal_impl(pep, begin1, end1, begin2, end2, common_type{});
 }
 
 template <typename InputIt1, typename InputIt2>
-bool equal_dispatch(
+bool equal_impl(
     parallel_vector_execution_policy pvep, 
     InputIt1 begin1, InputIt1 end1, InputIt2 begin2, InputIt2 end2
 )
 {
     using common_type = common_iter_type<InputIt1, InputIt2>;
-    return vec_equal_impl(pvep, begin1, end1, begin2, end2, common_type{});
-}
-
-// This is a very common pattern that will need to be extracted.
-template <typename InputIt1, typename InputIt2>
-bool equal_dispatch(
-    execution_policy p, InputIt1 begin1, InputIt1 end1,
-    InputIt2 begin2, InputIt2 end2
-)
-{
-    if(p.target_type() == typeid(seq)) {
-        sequential_execution_policy* pol = 
-            p.get<sequential_execution_policy>();
-        return equal_dispatch(*pol, begin1, end1, begin2, end2);
-    }
-    else if(p.target_type() == typeid(par)) {
-        return equal_dispatch(
-            *p.get<parallel_execution_policy>(),
-            begin1, end1, begin2, end2
-        );
-    }
-    else if(p.target_type() == typeid(par_vec)) {
-        return equal_dispatch(
-            *p.get<parallel_vector_execution_policy>(),
-            begin1, end1, begin2, end2
-        );
-    }
+    return equal_impl(pvep, begin1, end1, begin2, end2, common_type{});
 }
 
 } // end namespace internal 
 
 //================================================================================
+
+template <typename T>
+using basic_type = 
+    typename std::remove_reference_t<
+        typename std::remove_cv<T>
+    >;
 
 template <typename ExecutionPolicy, typename InputIt1, typename InputIt2>
 bool equal(
@@ -301,18 +283,39 @@ bool equal(
     typename std::enable_if<is_execution_policy_v<std::decay_t<ExecutionPolicy>>>::type* = 0
 )
 { 
-    return internal::equal_dispatch(policy, begin1, end1, begin2, end2);
+    internal::equal_impl(policy, begin1, end1, begin2, end2);
 }
 
 template <typename ExecutionPolicy, typename InputIt1, typename InputIt2, typename Predicate>
 bool equal(
     ExecutionPolicy&& policy, InputIt1 begin1, InputIt1 end1,
-    InputIt2 begin2, InputIt2 end2,
-    Predicate pred,
+    InputIt2 begin2, InputIt2 end2, Predicate pred,
     typename std::enable_if<is_execution_policy_v<std::decay_t<ExecutionPolicy>>>::type* = 0
 )
 { 
-    return internal::equal_dispatch(policy, begin1, end1, begin2, end2, pred);
+    return internal::equal_impl(policy, begin1, end1, begin2, end2, pred);
+}
+
+template <typename InputIt1, typename InputIt2>
+bool equal(
+    execution_policy policy, InputIt1 begin1, InputIt1 end1,
+    InputIt2 begin2, InputIt2 end2
+)
+{ 
+    auto func = [begin1, end1, begin2, end2](auto policy)
+                { return internal::equal_impl(policy, begin1, end1, begin2, end2); };
+    return internal::dispatch(policy, func);
+}
+
+template <typename InputIt1, typename InputIt2, typename Predicate>
+bool equal(
+    execution_policy policy, InputIt1 begin1, InputIt1 end1,
+    InputIt2 begin2, InputIt2 end2, Predicate pred
+)
+{ 
+    auto func = [begin1, end1, begin2, end2, pred](auto policy)
+                { return internal::equal_impl(policy, begin1, end1, begin2, end2, pred); };
+    return internal::dispatch(policy, func);
 }
 
 } // end namespace parallel
