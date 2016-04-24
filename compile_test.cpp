@@ -1,6 +1,8 @@
 #include "execution_policy.hpp"
 #include "all_any_none.hpp"
 #include "equal.hpp"
+#include "for_each.hpp"
+#include "count.hpp"
 
 #include <iostream>
 
@@ -34,4 +36,11 @@ int main()
 
     r = exp_par::none_of(p, v.begin(), v.end(), [](int i) { return i < 0; });
     std::cout << std::boolalpha << r << '\n';
+
+    exp_par::for_each(p, v.begin(), v.end(), [](int i) { if((i % 10000) == 0) std::cout << i << '\n'; });
+    auto num = exp_par::count(p, v.begin(), v.end(), 5000);
+    std::cout << num << '\n';
+
+    num = exp_par::count_if(p, v.begin(), v.end(), [](int i) { return i % 2 == 0; });
+    std::cout << num << '\n';
 }
