@@ -18,8 +18,12 @@ namespace parallel
 namespace internal
 {
 
+//================================================================================
+
 template <typename R>
 class worker;
+
+//================================================================================
 
 template <typename R>
 class work_queue
@@ -33,6 +37,12 @@ public:
         for(unsigned i = 0; i < num_workers; ++i) {
             workers_.emplace_back(*this);
         }
+    }
+
+    ~work_queue()
+    {
+        wait();
+        stop();
     }
 
     void push(std::function<R()>&& func)
@@ -73,6 +83,8 @@ private:
     friend class worker<R>;
 };
 
+//================================================================================
+
 template <typename R>
 class worker
 {
@@ -87,7 +99,7 @@ public:
     ~worker()
     {
         wait();
-    } 
+    }
 
     worker& operator=(worker&&) = default;
     worker(worker&&) = default;
@@ -99,18 +111,20 @@ public:
         }
     }
 
-    void start() 
+    void start()
     {
         while(parent_queue_.continue_.load()) {
             std::unique_lock<std::mutex> lock(parent_queue_.work_lock_);
-            parent_queue_.work_available_.wait(lock, [this]() { check_condition(); });
+            parent_queue_.work_available_.wait(
+                lock, [this]() { return check_condition(); }
+            );
             if(!parent_queue_.continue_) { return; }
             if(parent_queue_.work_.empty()) { continue; }
             std::function<R()> f = parent_queue_.work_.front();
             parent_queue_.work_.pop();
-            parent_queue_.work_lock_.unlock();
+            lock.unlock();
             auto result = f();
-            parent_queue_.push_result(std::move(result)); 
+            parent_queue_.push_result(std::move(result));
         }
     }
 
