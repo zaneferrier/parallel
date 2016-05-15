@@ -4,6 +4,7 @@
 #include <memory>
 #include <type_traits>
 #include <typeinfo>
+#include <vector>
 
 namespace experimental
 {
@@ -138,8 +139,8 @@ public:
             destroy();
             which = other.which;
             construct();
-            return *this;
         }
+        return *this;
     }
 
     template <typename T>
@@ -258,6 +259,28 @@ void swap(execution_policy p1, execution_policy& p2) noexcept
 {
     p1.swap(p2);    
 }
+
+//================================================================================
+
+class exception_list
+    : public std::exception
+{
+public:
+
+    using iterator = std::vector<std::exception_ptr>::const_iterator;
+
+    std::size_t size() const noexcept { return exceptions_.size(); }
+    iterator begin() const noexcept { return exceptions_.begin(); }
+    iterator end() const noexcept { return exceptions_.end(); }
+    const char* what() const noexcept override { return "Exception List"; }
+    void push_back(std::exception_ptr eptr) { exceptions_.push_back(std::move(eptr)); }
+
+private:
+
+    std::vector<std::exception_ptr> exceptions_;
+};
+
+//================================================================================
 
 } // end namespace parallel
 } // end namespace experimental
