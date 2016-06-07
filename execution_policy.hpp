@@ -119,11 +119,12 @@ public:
 
     template <typename T>
     execution_policy(
-        const T& exec, 
+        const T& exec,
         typename std::enable_if<is_execution_policy_v<T>>::type* = 0
     )
         : which(to_policy_type<T>())
     { 
+        (void)exec;
         construct();
     }
 
@@ -146,6 +147,7 @@ public:
     typename std::enable_if<is_execution_policy_v<T>, execution_policy&>::type
     operator=(const T& exec) noexcept
     {
+        (void)exec;
         policy_type other_which = to_policy_type<T>();
         destroy();
         which = other_which;

@@ -161,6 +161,8 @@ bool none_of_impl(
 // These simply forward to the exact same functions as the parallel implementation
 // for now.
 // For actual vectorization, how would this work with regards to the predicate?
+// Likely this can only be done for contiguous iteratators, and basic checks
+// on built-in types.
 
 template <typename InputIt, typename Predicate>
 bool any_of_impl(
@@ -168,6 +170,7 @@ bool any_of_impl(
     std::random_access_iterator_tag tag, Predicate pred 
 )
 {
+    (void)pep;
     // Careful, note the swap from pep here to par (which is the global
     // parallel_execution_policy object).
     return any_all_none_impl<InputIt, Predicate, false>(
@@ -181,6 +184,7 @@ bool all_of_impl(
     std::random_access_iterator_tag tag, Predicate pred 
 )
 {
+    (void)pep;
     return any_all_none_impl<InputIt, Predicate, true>(
                par, begin, end, tag, pred
            );
@@ -192,6 +196,7 @@ bool none_of_impl(
     std::random_access_iterator_tag tag, Predicate pred 
 )
 {
+    (void)pep;
     return !any_of_impl(par, begin, end, tag, pred);
 }
 
@@ -264,7 +269,7 @@ bool any_of(
     typename std::enable_if<is_execution_policy_v<std::decay_t<ExecutionPolicy>>>::type* = 0
 )
 { 
-    internal::any_of_impl(policy, begin, end, pred);
+    return internal::any_of_impl(policy, begin, end, pred);
 }
 
 template <typename ExecutionPolicy, typename InputIt, typename Predicate>
@@ -273,7 +278,7 @@ bool all_of(
     typename std::enable_if<is_execution_policy_v<std::decay_t<ExecutionPolicy>>>::type* = 0
 )
 { 
-    internal::all_of_impl(policy, begin, end, pred);
+    return internal::all_of_impl(policy, begin, end, pred);
 }
 
 template <typename ExecutionPolicy, typename InputIt, typename Predicate>
@@ -282,7 +287,7 @@ bool none_of(
     typename std::enable_if<is_execution_policy_v<std::decay_t<ExecutionPolicy>>>::type* = 0
 )
 { 
-    internal::none_of_impl(policy, begin, end, pred);
+    return internal::none_of_impl(policy, begin, end, pred);
 }
 
 template <typename InputIt, typename Predicate>

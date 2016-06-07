@@ -237,11 +237,8 @@ bool equal_impl(
         // Actually perform vectorized equal.
         // Not yet implemented
     }
-    else {
-        // More difficult with compound types, leave it sequential.
-        return std::equal(begin1, end1, begin2, end2);
-    }
-
+    // More difficult with compound types, leave it sequential.
+    return std::equal(begin1, end1, begin2, end2, binary_pred);
 }
 
 //================================================================================
@@ -283,7 +280,7 @@ bool equal(
     typename std::enable_if<is_execution_policy_v<std::decay_t<ExecutionPolicy>>>::type* = 0
 )
 { 
-    internal::equal_impl(policy, begin1, end1, begin2, end2);
+    return internal::equal_impl(policy, begin1, end1, begin2, end2);
 }
 
 template <typename ExecutionPolicy, typename InputIt1, typename InputIt2, typename Predicate>

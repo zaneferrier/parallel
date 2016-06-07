@@ -25,7 +25,7 @@ count_impl(
     sequential_execution_policy, InputIt begin, InputIt end, const T& value
 )
 {
-    std::count(begin, end, value);
+    return std::count(begin, end, value);
 }
 
 template <typename InputIt, typename UnaryPredicate>
@@ -34,7 +34,7 @@ count_if_impl(
     sequential_execution_policy, InputIt begin, InputIt end, UnaryPredicate p
 )
 {
-    std::count_if(begin, end, p);
+    return std::count_if(begin, end, p);
 }
 
 //================================================================================
@@ -86,7 +86,7 @@ count_impl_base(
                 return_type seen{0};
                 auto begin_chunk = begin + i_chunk;
                 auto end_chunk = begin + next_i_chunk;
-                for(begin_chunk; begin_chunk != end_chunk; ++begin_chunk) {
+                for(; begin_chunk != end_chunk; ++begin_chunk) {
                     if(p(*begin_chunk)) ++seen;
                 }
                 return seen;
